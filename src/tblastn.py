@@ -63,20 +63,20 @@ def parse_tblastn(outf: str, e=1e-5, bitscore=30) -> list[tblastnhit]:
 
 def unique_hits(tblastn_out: list[tblastnhit]) -> list[tblastnhit]:
     out = []
-    for i in tblastn_out:
-        if len(out) == 0:
-            out.append(i)  # add first to list
-            continue
-        for k, j in enumerate(out):
-            if i == j:  # self
-                continue
-            if i.subject == j.subject:  # these are the only overlaps
-                if i.sstartorder <= j.sstartorder:
-                    if i.sendorder >= j.sendorder:  # equal or fully subsumed
-                        if i.evalue < j.evalue and i.bitscore > j.bitscore:
-                            out[k] = i  # replace
+    for h in tblastn_out:
+        out.append(h)
+    for hit in out:
+        for j in out:
+            if hit == j:
+                continue  # exclude self
+            if (
+                j.sstartorder <= hit.sstartorder and
+                j.sendorder >= hit.sendorder  # fully subsumed
+            ):
+                if j.evalue < hit.evalue and j.bitscore > hit.bitscore:
+                    out.remove(hit)
                 else:
-                    out.append(i)
+                    out.remove(j)
     return out
 
 
@@ -97,4 +97,3 @@ if __name__ == "__main__":
             run_makeblastdb(args.database)
     tblastn_out = run_tblastn(args.query, args.database)
     out = parse_tblastn(tblastn_out)
-    print([(x.query, x.subject) for x in unique_hits(out)])
