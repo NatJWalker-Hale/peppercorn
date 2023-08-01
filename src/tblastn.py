@@ -4,9 +4,13 @@ import os
 import sys
 import argparse
 import subprocess
+from itertools import pairwise
 
 
 class tblastnhit():
+    """
+    simple referencable data class for tblastn outfmt 7
+    """
     def __init__(self, input=[]):
         self.query = input[0]
         self.subject = input[1]
@@ -56,7 +60,7 @@ def parse_tblastn(outf: str, e=1e-5, bitscore=30) -> list[tblastnhit]:
                 continue
             line = line.strip().split()
             h = tblastnhit(input=line)
-            if h.evalue < e and h.bitscore > bitscore:
+            if h.evalue < e and h.bitscore > bitscore:  # filter
                 out.append(h)
     return out  # list of lists
 
@@ -70,13 +74,63 @@ def unique_hits(tblastn_out: list[tblastnhit]) -> list[tblastnhit]:
             if hit == j:
                 continue  # exclude self
             if (
+                j.sstartorder == hit.sstartorder and
+                j.sendorder == hit.sendorder  # same subject span
+            ):
+                if j.evalue < hit.evalue and j.bitscore > hit.bitscore:
+                    out.remove(hit)  # other hit is better
+                else:
+                    out.remove(j)
+            elif (
                 j.sstartorder <= hit.sstartorder and
                 j.sendorder >= hit.sendorder  # fully subsumed
             ):
-                if j.evalue < hit.evalue and j.bitscore > hit.bitscore:
-                    out.remove(hit)
+                out.remove(hit)
+    return out
+
+
+def join_hits(tblastn_out: list[tblastnhit], length=2000) -> list[tuple]:
+    """
+    connects hits (assumed separate exons) into ranges if distance between
+    hits is less than length. Therefore, length should be longer than expected
+    max intron length
+    """
+    out = []
+    subjects = set([x.subject for x in tblastn_out])
+    for s in subjects:
+        ordered = sorted([x for x in tblastn_out if x.subject == s],
+                         key=lambda x: x.sstartorder)
+        # print([(x.sstartorder, x.sendorder) for x in ordered])
+        for x in pairwise(ordered):
+            if x[1].sstartorder - x[0].sendorder < length:
+                if x[0].query != x[1].query:
+                    if (
+                        x[0].evalue < x[1].evalue or
+                        x[0].bitscore > x[1].bitscore
+                    ):
+                        betterhit = x[0]
+                    else:
+                        betterhit = x[1]
+                    out.append((betterhit.query, x[0].subject,
+                                x[0].sstartorder, x[1].sendorder))
                 else:
-                    out.remove(j)
+                    out.append((x[0].query, x[0].subject,
+                                x[0].sstartorder, x[1].sendorder))
+    return out
+
+
+def pad_range(tblastn_out: list[tblastnhit], factor=2) -> list[tuple]:
+    out = []
+    subjects = set([x.subject for x in tblastn_out])
+    for s in subjects:
+        lens = [x.sendorder - x.sstartorder for x in tblastn_out if
+                x.subject == s]
+        mean_len = sum(lens) / len(lens)
+        for h in tblastn_out:
+            if h.subject == s:
+                out.append((h.query, h.subject,
+                            round(h.sstartorder - factor * mean_len),
+                            round(h.sendorder + factor * mean_len)))
     return out
 
 
@@ -97,3 +151,6 @@ if __name__ == "__main__":
             run_makeblastdb(args.database)
     tblastn_out = run_tblastn(args.query, args.database)
     out = parse_tblastn(tblastn_out)
+    print([(x.query, x.subject,
+            x.sstartorder, x.sendorder) for x in unique_hits(out)])
+    print(join_hits(unique_hits(out)))
