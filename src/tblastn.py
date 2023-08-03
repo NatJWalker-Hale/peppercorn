@@ -4,34 +4,7 @@ import os
 import sys
 import argparse
 import subprocess
-from itertools import pairwise
-
-
-class tblastnhit():
-    """
-    simple referencable data class for tblastn outfmt 7
-    """
-    def __init__(self, input=[]):
-        self.query = input[0]
-        self.subject = input[1]
-        self.id = float(input[2])
-        self.len = int(input[3])
-        self.mm = int(input[4])
-        self.gapopens = int(input[5])
-        self.qstart = int(input[6])
-        self.qend = int(input[7])
-        self.sstart = int(input[8])
-        self.send = int(input[9])
-        self.evalue = float(input[10])
-        self.bitscore = float(input[11])
-        self.sstartorder = 0
-        self.sendorder = 0
-        if self.sstart > self.send:  # reverse
-            self.sstartorder = self.send
-            self.sendorder = self.sstart
-        else:
-            self.sstartorder = self.sstart
-            self.sendorder = self.send
+from utils import tblastnhit, genome_range
 
 
 def run_makeblastdb(dbf: str, dbtype="nucl"):
@@ -41,11 +14,11 @@ def run_makeblastdb(dbf: str, dbtype="nucl"):
     subprocess.run(cmd, shell=False)
 
 
-def run_tblastn(queryf: str, dbf: str) -> str:
+def run_tblastn(queryf: str, dbf: str, threads=1) -> str:
     sys.stderr.write("Searching for matches to quer(y/ies)\n\n")
     outf = queryf + ".tblastn.outfmt7"
     cmd = ["tblastn", "-query", queryf, "-db", dbf, "-outfmt", "7", "-out",
-           outf]
+           outf, "-num_threads", str(threads)]
     sys.stderr.write(subprocess.list2cmdline(cmd) + "\n\n")
     subprocess.run(cmd, shell=False)
     return outf
@@ -82,56 +55,72 @@ def unique_hits(tblastn_out: list[tblastnhit]) -> list[tblastnhit]:
                 else:
                     out.remove(j)
             elif (
-                j.sstartorder <= hit.sstartorder and
-                j.sendorder >= hit.sendorder  # fully subsumed
+                j.sstartorder < hit.sstartorder and
+                j.sendorder > hit.sendorder  # fully subsumed
             ):
                 out.remove(hit)
     return out
 
 
-def join_hits(tblastn_out: list[tblastnhit], length=2000) -> list[tuple]:
+def join_hits(tblastn_out: list[tblastnhit],
+              length=3000, over=300) -> list[tblastnhit]:
     """
     connects hits (assumed separate exons) into ranges if distance between
     hits is less than length. Therefore, length should be longer than expected
-    max intron length
+    max intron length (and if unsure, longer is better).
+
+    This has the pleasing benefit of merging overlaps, because diff is -ve
+    which is less than length.
     """
     out = []
     subjects = set([x.subject for x in tblastn_out])
     for s in subjects:
         ordered = sorted([x for x in tblastn_out if x.subject == s],
                          key=lambda x: x.sstartorder)
-        # print([(x.sstartorder, x.sendorder) for x in ordered])
-        for x in pairwise(ordered):
-            if x[1].sstartorder - x[0].sendorder < length:
-                if x[0].query != x[1].query:
-                    if (
-                        x[0].evalue < x[1].evalue or
-                        x[0].bitscore > x[1].bitscore
-                    ):
-                        betterhit = x[0]
-                    else:
-                        betterhit = x[1]
-                    out.append((betterhit.query, x[0].subject,
-                                x[0].sstartorder, x[1].sendorder))
-                else:
-                    out.append((x[0].query, x[0].subject,
-                                x[0].sstartorder, x[1].sendorder))
+        or_iter = iter(ordered)
+        last_hit = next(or_iter)
+        for next_hit in or_iter:
+            gap = next_hit.sstartorder - last_hit.sendorder
+            if gap < length:
+                last_hit.sendorder = next_hit.sendorder
+                if gap > 0:  # not overlapping
+                    if last_hit.query != next_hit.query:
+                        if next_hit.query not in last_hit.queries:
+                            last_hit.queries.append(next_hit.query)
+                elif -gap > over:   # overlapping, want to merge
+                    if last_hit.query != next_hit.query:
+                        if (
+                            last_hit.evalue < next_hit.evalue or
+                            last_hit.bitscore > next_hit.bitscore
+                        ):
+                            sys.stderr.write("Replacing %s with %s\n\n" %
+                                             (next_hit.query, last_hit.query))
+                            next_hit.query = last_hit.query  # replace with
+            else:
+                out.append(last_hit)
+                last_hit = next_hit
+        out.append(last_hit)
     return out
 
 
-def pad_range(tblastn_out: list[tblastnhit], factor=2) -> list[tuple]:
+def hits_to_range(tblastn_out: list[tblastnhit]) -> list[genome_range]:
     out = []
-    subjects = set([x.subject for x in tblastn_out])
-    for s in subjects:
-        lens = [x.sendorder - x.sstartorder for x in tblastn_out if
-                x.subject == s]
-        mean_len = sum(lens) / len(lens)
-        for h in tblastn_out:
-            if h.subject == s:
-                out.append((h.query, h.subject,
-                            round(h.sstartorder - factor * mean_len),
-                            round(h.sendorder + factor * mean_len)))
+    for h in tblastn_out:
+        newrange = genome_range([h.query, h.subject,
+                                 h.sstartorder, h.sendorder])
+        if len(h.queries) != 0:
+            newrange.queries = h.queries
+        out.append(newrange)
     return out
+
+
+def pad_range(ranges: list[genome_range], length=3000):
+    """
+    pad a length on either end of a range
+    """
+    for r in ranges:
+        r.start -= length
+        r.end += length
 
 
 if __name__ == "__main__":
@@ -153,4 +142,9 @@ if __name__ == "__main__":
     out = parse_tblastn(tblastn_out)
     print([(x.query, x.subject,
             x.sstartorder, x.sendorder) for x in unique_hits(out)])
-    print(join_hits(unique_hits(out)))
+    print([(x.query, x.subject,
+            x.sstartorder, x.sendorder,
+            x.queries) for x in join_hits(unique_hits(out))])
+    print([(x.query, x.subject,
+           x.start, x.end,
+           x.queries) for x in hits_to_range(join_hits(unique_hits(out)))])

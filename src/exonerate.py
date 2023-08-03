@@ -19,9 +19,11 @@ def run_exonerate(dbf, queryf, model="protein2genome", trim=15):
     outgff = ".".join([dbf, queryf, "exonerate.hints"])
     with open(outgff, "w") as outf:
         going = False
+        result = False
         for line in p.stdout.splitlines():
             if line == "# --- START OF GFF DUMP ---":
                 going = True
+                result = True
             elif line == "# --- END OF GFF DUMP ---":
                 going = False
             if going:
@@ -43,7 +45,7 @@ def run_exonerate(dbf, queryf, model="protein2genome", trim=15):
                                               "src=M;grep=" + queryf +
                                               ";pri=4\n"
                                               ]))
-        return out, outgff
+        return out, outgff, result
 
 
 if __name__ == "__main__":
@@ -57,5 +59,5 @@ if __name__ == "__main__":
                         align")
     args = parser.parse_args()
 
-    xnt_out, xnt_hint = run_exonerate(args.database, args.query)
+    xnt_out, xnt_hint, _ = run_exonerate(args.database, args.query)
     print(xnt_out, xnt_hint)
