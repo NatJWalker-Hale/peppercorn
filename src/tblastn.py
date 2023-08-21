@@ -63,7 +63,7 @@ def unique_hits(tblastn_out: list[tblastnhit]) -> list[tblastnhit]:
 
 
 def join_hits(tblastn_out: list[tblastnhit],
-              length=3000, over=300) -> list[tblastnhit]:
+              length=3000, over=500) -> list[tblastnhit]:
     """
     connects hits (assumed separate exons) into ranges if distance between
     hits is less than length. Therefore, length should be longer than expected

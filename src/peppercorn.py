@@ -49,6 +49,9 @@ if __name__ == "__main__":
                         default=3000)
     parser.add_argument("-t", "--threads", help="Number of threads", type=int,
                         default=1)
+    parser.add_argument("-s", "--species", help="Species model to use for \
+                        Augustus. The more closely related, the better",
+                        type=str, default="arabidopsis")
     args = parser.parse_args()
 
     # run tblastn
@@ -69,9 +72,11 @@ if __name__ == "__main__":
     tblastn.pad_range(ranges, length=args.intronlength + mean_hit_len)
     # start pulling subsequences
     subseq.write_subseq(args.genome, ranges)
-    print([(x.query, x.subject,
-            x.start, x.end,
-            x.file) for x in ranges])
+    # print([(x.query, x.subject,
+    #         x.start, x.end,
+    #         x.file) for x in ranges])
+    goodres = []
+    badres = []
     for r in ranges:
         print(r.query)
         print(r.queries)
@@ -85,7 +90,36 @@ if __name__ == "__main__":
             # os.remove(res)
             ranges.remove(r)
         else:
-            augout = augustus.run_augustus(r.file, hintsf)
-            print(augustus.parse_augustus(augout))
+            augout = augustus.run_augustus(r.file, hintsf, args.species)
+            auggenes = augustus.parse_augustus(augout)
+            for a in auggenes:
+                if a.percent_support > 0:
+                    a.gene = "%s_%s_%s_%s" % (r.subject,
+                                              r.start, r.end,
+                                              a.gene)
+                    goodres.append(a)
+                else:
+                    a.gene = "%s_%s_%s_%s" % (r.subject,
+                                              r.start, r.end,
+                                              a.gene)
+                    badres.append(a)
 
-        # stuff with augustus
+    # augustus.rename(goodres)
+
+    with open("final_supported_predictions.cds.fa", "w") as outf:
+        for r in goodres:
+            outf.write(r.write_fasta(coding=True))
+
+    with open("final_supported_predictions.gtf", "w") as outf:
+        for r in goodres:
+            for i in r.gff:
+                outf.write("\t".join(i) + "\n")
+
+    with open("final_unsupported_predictions.cds.fa", "w") as outf:
+        for r in badres:
+            outf.write(r.write_fasta(coding=True))
+
+    with open("final_unsupported_predictions.gtf", "w") as outf:
+        for r in badres:
+            for i in r.gff:
+                outf.write("\t".join(i) + "\n")

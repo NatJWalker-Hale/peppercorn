@@ -6,7 +6,7 @@ import argparse
 import subprocess
 
 
-def run_exonerate(dbf, queryf, model="protein2genome", trim=15):
+def run_exonerate(dbf, queryf, model="protein2genome", trim=9):
     sys.stderr.write("Aligning proteins to genome with Exonerate\n\n")
     cmd = ["exonerate", "-m", model, "--showtargetgff", "TRUE", queryf,
            dbf]
