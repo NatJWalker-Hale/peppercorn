@@ -6,7 +6,10 @@ import sys
 import subprocess
 
 
-class augustus_res():
+class AugustusRes():
+    """
+    simple class to hold Augustus results
+    """
     def __init__(self):
         self.gene = ""
         self.gff = []
@@ -21,31 +24,40 @@ class augustus_res():
         self.incompatible = 0
 
     def write_fasta(self, coding=True):
+        """
+        write FASTA of self.codingseq (default) or self.aaseq
+        """
         if coding:
-            out = ">%s\n%s\n" % (self.gene, self.codingseq)
+            out = f">{self.gene}\n{self.codingseq}\n"
         else:
-            out = ">%s\n%s\n" % (self.gene, self.aaseq)
+            out = f">{self.gene}\n{self.aaseq}\n"
         return out
 
 
 def run_augustus(dbf: str, hintsf: str, species="arabidopsis",
                  coding=True) -> str:
+    """
+    run augustus using arabidopsis model and returning coding sequences by default
+    """
     cmd = ["augustus", "--species=" + species,
            "--hintsfile=" + hintsf, dbf]
     if coding:
         cmd += ["--codingseq=on"]
     sys.stderr.write(subprocess.list2cmdline(cmd)+"\n\n")
-    p = subprocess.run(cmd, shell=False, capture_output=True, text=True)
+    p = subprocess.run(cmd, shell=False, capture_output=True, text=True, check=True)
     out = dbf + ".hints.augustus.out"
-    with open(out, "w") as outf:
+    with open(out, "w", encoding="utf-8") as outf:
         for line in p.stdout.splitlines():
             outf.write(line+"\n")
     return out
 
 
-def parse_augustus(outf: str) -> list[augustus_res]:
+def parse_augustus(outf: str) -> list[AugustusRes]:
+    """
+    parse augustus output gff
+    """
     out = []
-    with open(outf, "r") as res:
+    with open(outf, "r", encoding="utf-8") as res:
         gene = False
         cds = False
         aa = False
@@ -109,13 +121,16 @@ def parse_augustus(outf: str) -> list[augustus_res]:
                     newres.incompatible = num
             if line.startswith("start gene"):
                 gene = True
-                newres = augustus_res()
+                newres = AugustusRes()
                 newres.gene = line.split(" ")[2]
     return out
 
 
-def rename(results: list[augustus_res]):
+def rename(results: list[AugustusRes]):
+    """
+    rename a list of Augustus annotations to consecutive integer format
+    """
     i = 1
     for r in results:
-        r.gene = "g%s" % i
+        r.gene = f"g{i}"
         i += 1

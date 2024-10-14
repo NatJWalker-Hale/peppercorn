@@ -45,12 +45,12 @@ if __name__ == "__main__":
     parser.add_argument("queries", help="FASTA-formatted protein queries for \
                         homology-based annotation")
     parser.add_argument("-i", "--intronlength", help="Expected maximum intron \
-                        length (if unsure, longer better)", type=int,
+                        length (if unsure, longer better) [3000]", type=int,
                         default=3000)
-    parser.add_argument("-t", "--threads", help="Number of threads", type=int,
+    parser.add_argument("-t", "--threads", help="Number of threads [1]", type=int,
                         default=1)
     parser.add_argument("-s", "--species", help="Species model to use for \
-                        Augustus. The more closely related, the better",
+                        Augustus. The more closely related, the better [arabidopsis]",
                         type=str, default="arabidopsis")
     args = parser.parse_args()
 

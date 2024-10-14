@@ -8,16 +8,15 @@ import subprocess
 
 def run_exonerate(dbf, queryf, model="protein2genome", trim=9):
     sys.stderr.write("Aligning proteins to genome with Exonerate\n\n")
-    cmd = ["exonerate", "-m", model, "--showtargetgff", "TRUE", queryf,
-           dbf]
+    cmd = ["exonerate", "-m", model, "--showtargetgff", "TRUE", #"--refine", "full",
+           queryf, dbf]
     sys.stderr.write(subprocess.list2cmdline(cmd)+"\n\n")
-    p = subprocess.run(cmd, shell=False, capture_output=True, text=True)
+    p = subprocess.run(cmd, shell=False, capture_output=True, text=True, check=True)
     out = ".".join([dbf, queryf, "exonerate.out"])
-    with open(out, "w") as outf:
-        for line in p.stdout.splitlines():
-            outf.write(line.strip()+"\n")
+    with open(out, "w", encoding="utf-8") as outf:
+        outf.write(p.stdout + "\n")
     outgff = ".".join([dbf, queryf, "exonerate.hints"])
-    with open(outgff, "w") as outf:
+    with open(outgff, "w", encoding="utf-8") as outf:
         going = False
         result = False
         for line in p.stdout.splitlines():
