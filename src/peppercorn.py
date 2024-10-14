@@ -65,7 +65,7 @@ if __name__ == "__main__":
     hit_lens = [x.sendorder - x.sstartorder for x in tblastn_hits]
     mean_hit_len = round(sum(hit_lens) / len(hit_lens))
     # unique_hits = tblastn.unique_hits(tblastn_hits)
-    ranges = tblastn.hits_to_range(tblastn.join_hits(tblastn_hits))
+    ranges = tblastn.hits_to_range(tblastn.join_hits(tblastn_hits, args.intronlength, mean_hit_len))
     print([(x.query, x.subject,
             x.start, x.end,
             x.file) for x in ranges])
