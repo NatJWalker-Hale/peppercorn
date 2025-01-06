@@ -73,7 +73,7 @@ def join_hits(tblastn_out: list[tblastnhit],
     which is less than length.
     """
     out = []
-    subjects = set([x.subject for x in tblastn_out])
+    subjects = set(x.subject for x in tblastn_out)
     for s in subjects:
         ordered = sorted([x for x in tblastn_out if x.subject == s],
                          key=lambda x: x.sstartorder)
@@ -119,8 +119,15 @@ def pad_range(ranges: list[genome_range], length=3000):
     pad a length on either end of a range
     """
     for r in ranges:
-        r.start -= length
-        r.end += length
+        if (r.start < 0) or (r.start - length < 0):
+            r.new_start(1)
+        else:
+            news = r.start - length
+            r.new_start(news)
+
+        newe = r.end + length
+        r.new_end(newe)
+
 
 
 if __name__ == "__main__":

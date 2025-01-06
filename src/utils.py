@@ -60,3 +60,9 @@ class genome_range():
         self.end = input[3]
         self.queries = [self.query]
         self.file = ""
+
+    def new_start(self, start: int):
+        self.start = start
+
+    def new_end(self, end: int):
+        self.end = end 

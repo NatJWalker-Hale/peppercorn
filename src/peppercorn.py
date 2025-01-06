@@ -70,6 +70,10 @@ if __name__ == "__main__":
             x.start, x.end,
             x.file) for x in ranges])
     tblastn.pad_range(ranges, length=args.intronlength + mean_hit_len)
+    print([(x.query, x.subject,
+            x.start, x.end,
+            x.file) for x in ranges])
+    # sys.exit()
     # start pulling subsequences
     subseq.write_subseq(args.genome, ranges)
     # print([(x.query, x.subject,
